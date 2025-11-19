@@ -1,5 +1,70 @@
 <?php
 
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\NewsletterController;
+use App\Http\Controllers\WishlistController;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/', [HomeController::class, 'index']);
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+*/
+
+// Home
+Route::get('/', [HomeController::class, 'index'])->name('home');
+
+// Products
+Route::prefix('products')->name('products.')->group(function () {
+    Route::get('/', [ProductController::class, 'index'])->name('index');
+    Route::get('/new', [ProductController::class, 'newArrivals'])->name('new');
+    Route::get('/sale', [ProductController::class, 'sale'])->name('sale');
+    Route::get('/bestsellers', [ProductController::class, 'bestsellers'])->name('bestsellers');
+    Route::get('/category/{category}', [ProductController::class, 'category'])->name('category');
+    Route::get('/{id}', [ProductController::class, 'show'])->name('show');
+});
+
+// Cart Routes
+Route::prefix('cart')->name('cart.')->group(function () {
+    Route::get('/', [CartController::class, 'index'])->name('index');
+    Route::post('/add', [CartController::class, 'add'])->name('add');
+    Route::patch('/update/{id}', [CartController::class, 'update'])->name('update');
+    Route::delete('/remove/{id}', [CartController::class, 'remove'])->name('remove');
+    Route::delete('/clear', [CartController::class, 'clear'])->name('clear');
+    Route::post('/apply-coupon', [CartController::class, 'applyCoupon'])->name('apply-coupon');
+    Route::delete('/remove-coupon', [CartController::class, 'removeCoupon'])->name('remove-coupon');
+    Route::get('/count', [CartController::class, 'count'])->name('count');
+});
+
+// Checkout Routes
+Route::prefix('checkout')->name('checkout.')->group(function () {
+    Route::get('/', function() {
+        return view('checkout.index');
+    })->name('index');
+});
+
+// Wishlist (requires authentication)
+Route::middleware('auth')->prefix('wishlist')->name('wishlist.')->group(function () {
+    Route::get('/', [WishlistController::class, 'index'])->name('index');
+    Route::post('/toggle/{product}', [WishlistController::class, 'toggle'])->name('toggle');
+});
+
+// Newsletter
+Route::post('/newsletter/subscribe', [NewsletterController::class, 'subscribe'])->name('newsletter.subscribe');
+
+// Static Pages
+Route::view('/collections', 'pages.collections')->name('collections');
+Route::view('/gift-cards', 'pages.gift-cards')->name('gift-cards');
+Route::view('/contact', 'pages.contact')->name('contact');
+Route::view('/shipping', 'pages.shipping')->name('shipping');
+Route::view('/returns', 'pages.returns')->name('returns');
+Route::view('/size-guide', 'pages.size-guide')->name('size-guide');
+Route::view('/about', 'pages.about')->name('about');
+Route::view('/careers', 'pages.careers')->name('careers');
+Route::view('/privacy', 'pages.privacy')->name('privacy');
+Route::view('/terms', 'pages.terms')->name('terms');
+
+// Authentication Routes (uncomment if using Laravel Breeze/Jetstream/Fortify)
+// require __DIR__.'/auth.php';
