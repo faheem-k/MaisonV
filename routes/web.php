@@ -50,7 +50,7 @@ Route::prefix('checkout')->name('checkout.')->group(function () {
 Route::get('/order/confirmation/{order}', [CheckoutController::class, 'confirmation'])->name('order.confirmation');
 
 // Admin Routes (No Authentication for Now)
-Route::prefix('admin')->name('admin.')->group(function () {
+Route::prefix('admin-panel')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('dashboard');
     
     // Products Management
