@@ -3,6 +3,8 @@
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\NewsletterController;
 use App\Http\Controllers\WishlistController;
 use Illuminate\Support\Facades\Route;
@@ -40,9 +42,34 @@ Route::prefix('cart')->name('cart.')->group(function () {
 
 // Checkout Routes
 Route::prefix('checkout')->name('checkout.')->group(function () {
-    Route::get('/', function() {
-        return view('checkout.index');
-    })->name('index');
+    Route::get('/', [CheckoutController::class, 'index'])->name('index');
+    Route::post('/', [CheckoutController::class, 'store'])->name('store');
+});
+
+// Order confirmation route
+Route::get('/order/confirmation/{order}', [CheckoutController::class, 'confirmation'])->name('order.confirmation');
+
+// Admin Routes (No Authentication for Now)
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/', [AdminController::class, 'dashboard'])->name('dashboard');
+    
+    // Products Management
+    Route::prefix('products')->name('products.')->group(function () {
+        Route::get('/', [AdminController::class, 'products'])->name('index');
+        Route::get('/create', [AdminController::class, 'createProduct'])->name('create');
+        Route::post('/', [AdminController::class, 'storeProduct'])->name('store');
+        Route::get('/{product}/edit', [AdminController::class, 'editProduct'])->name('edit');
+        Route::patch('/{product}', [AdminController::class, 'updateProduct'])->name('update');
+        Route::delete('/{product}', [AdminController::class, 'destroyProduct'])->name('destroy');
+    });
+    
+    // Orders Management
+    Route::prefix('orders')->name('orders.')->group(function () {
+        Route::get('/', [AdminController::class, 'orders'])->name('index');
+        Route::get('/{order}', [AdminController::class, 'showOrder'])->name('show');
+        Route::put('/{order}', [AdminController::class, 'updateOrderStatus'])->name('update');
+        Route::delete('/{order}', [AdminController::class, 'destroyOrder'])->name('destroy');
+    });
 });
 
 // Wishlist (requires authentication)

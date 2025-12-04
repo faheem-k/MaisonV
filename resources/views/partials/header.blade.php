@@ -25,13 +25,25 @@
                     <i class="fas fa-search text-lg"></i>
                 </button>
                 @auth
-                    <a href="{{ route('profile') }}" class="text-gray-700 hover:text-black transition">
-                        <i class="fas fa-user text-lg"></i>
-                    </a>
+                    @if(Route::has('profile'))
+                        <a href="{{ route('profile') }}" class="text-gray-700 hover:text-black transition">
+                            <i class="fas fa-user text-lg"></i>
+                        </a>
+                    @else
+                        <a href="{{ url('/account') }}" class="text-gray-700 hover:text-black transition">
+                            <i class="fas fa-user text-lg"></i>
+                        </a>
+                    @endif
                 @else
-                    <a href="{{ route('login') }}" class="text-gray-700 hover:text-black transition">
-                        <i class="fas fa-user text-lg"></i>
-                    </a>
+                    @if(Route::has('login'))
+                        <a href="{{ route('login') }}" class="text-gray-700 hover:text-black transition">
+                            <i class="fas fa-user text-lg"></i>
+                        </a>
+                    @else
+                        <a href="{{ url('/login') }}" class="text-gray-700 hover:text-black transition">
+                            <i class="fas fa-user text-lg"></i>
+                        </a>
+                    @endif
                 @endauth
                 <a href="{{ route('cart.index') }}" class="text-gray-700 hover:text-black transition relative">
                     <i class="fas fa-shopping-bag text-lg"></i>
