@@ -206,7 +206,7 @@
                             </div>
                         </div>
                         <div class="mt-4 flex space-x-2">
-                            <a href="/product/{{ $product->id }}" 
+                            <a href="/products/{{ $product->id }}" 
                                class="flex-1 bg-black text-white text-center py-2 rounded-lg font-semibold hover:bg-gray-800 transition">
                                 View Details
                             </a>
