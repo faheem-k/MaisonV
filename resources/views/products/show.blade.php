@@ -136,9 +136,12 @@
                                 {{ $product->stock <= 0 ? 'disabled' : '' }}>
                             <i class="fas fa-shopping-bag mr-2"></i>Add to Cart
                         </button>
-                        <button type="button" class="flex-1 border-2 border-black text-black py-4 rounded-lg font-semibold hover:bg-black hover:text-white transition text-lg">
-                            <i class="far fa-heart mr-2"></i>Wishlist
-                        </button>
+                        <form action="{{ route('wishlist.toggle', $product->id) }}" method="POST" class="flex-1">
+                            @csrf
+                            <button type="submit" id="wishlist-btn" class="w-full border-2 border-black text-black py-4 rounded-lg font-semibold hover:bg-black hover:text-white transition text-lg wishlist-toggle-btn" data-product-id="{{ $product->id }}">
+                                <i class="far fa-heart mr-2"></i><span>Add to Wishlist</span>
+                            </button>
+                        </form>
                     </div>
 
                     <!-- Shipping Info -->
@@ -190,6 +193,11 @@
         </div>
     </div>
 
+    <!-- Reviews Section -->
+    <div class="mt-20 border-t pt-20">
+        @include('reviews.index', ['productId' => $product->id])
+    </div>
+
     <!-- Related Products -->
     @if($relatedProducts->count() > 0)
         <div class="mt-20">
@@ -230,5 +238,78 @@ function decrementQty() {
         qty.value = parseInt(qty.value) - 1;
     }
 }
+
+// Wishlist toggle functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const wishlistBtn = document.getElementById('wishlist-btn');
+    if (wishlistBtn) {
+        const productId = wishlistBtn.getAttribute('data-product-id');
+        
+        // Check if product is in wishlist on page load
+        checkWishlist(productId);
+        
+        // Note: Form submission handles the toggle, but we can enhance with AJAX if needed
+    }
+});
+
+function checkWishlist(productId) {
+    fetch(`/wishlist/check/${productId}`)
+        .then(response => response.json())
+        .then(data => {
+            const wishlistBtn = document.getElementById('wishlist-btn');
+            const wishlistBtnText = wishlistBtn.querySelector('span');
+            if (data.isInWishlist) {
+                wishlistBtn.classList.add('in-wishlist');
+                wishlistBtnText.textContent = 'In Wishlist';
+                wishlistBtn.querySelector('i').classList.remove('far');
+                wishlistBtn.querySelector('i').classList.add('fas');
+            }
+        });
+}
+
+// Enhance wishlist button with AJAX
+document.addEventListener('DOMContentLoaded', function() {
+    const wishlistBtn = document.getElementById('wishlist-btn');
+    if (wishlistBtn && wishlistBtn.parentElement.tagName === 'FORM') {
+        wishlistBtn.parentElement.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const productId = wishlistBtn.getAttribute('data-product-id');
+            fetch(`/wishlist/toggle/${productId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.isInWishlist) {
+                    wishlistBtn.classList.add('in-wishlist');
+                    wishlistBtn.querySelector('span').textContent = 'In Wishlist';
+                    wishlistBtn.querySelector('i').classList.remove('far');
+                    wishlistBtn.querySelector('i').classList.add('fas');
+                } else {
+                    wishlistBtn.classList.remove('in-wishlist');
+                    wishlistBtn.querySelector('span').textContent = 'Add to Wishlist';
+                    wishlistBtn.querySelector('i').classList.add('far');
+                    wishlistBtn.querySelector('i').classList.remove('fas');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    }
+});
 </script>
+
+<style>
+#wishlist-btn.in-wishlist {
+    background-color: black;
+    color: white;
+}
+
+#wishlist-btn.in-wishlist:hover {
+    background-color: #333;
+}
+</style>
 @endsection

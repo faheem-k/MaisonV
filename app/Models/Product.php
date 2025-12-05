@@ -43,6 +43,16 @@ class Product extends Model
         return $this->belongsToMany(Order::class, 'order_items');
     }
 
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
     // Accessors
     public function getDiscountPercentageAttribute()
     {

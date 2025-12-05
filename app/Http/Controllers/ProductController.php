@@ -126,7 +126,13 @@ class ProductController extends Controller
             ->limit(4)
             ->get();
 
-        return view('products.show', compact('product', 'relatedProducts'));
+        // Get product reviews
+        $reviews = $product->reviews()
+            ->with('user')
+            ->latest()
+            ->paginate(10);
+
+        return view('products.show', compact('product', 'relatedProducts', 'reviews'));
     }
 
     /**

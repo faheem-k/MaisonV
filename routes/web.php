@@ -7,6 +7,7 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\NewsletterController;
 use App\Http\Controllers\WishlistController;
+use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,10 +73,25 @@ Route::prefix('admin-panel')->name('admin.')->group(function () {
     });
 });
 
-// Wishlist (requires authentication)
-Route::middleware('auth')->prefix('wishlist')->name('wishlist.')->group(function () {
+// Wishlist
+Route::prefix('wishlist')->name('wishlist.')->group(function () {
     Route::get('/', [WishlistController::class, 'index'])->name('index');
     Route::post('/toggle/{product}', [WishlistController::class, 'toggle'])->name('toggle');
+    Route::post('/add/{product}', [WishlistController::class, 'add'])->name('add');
+    Route::post('/remove/{product}', [WishlistController::class, 'remove'])->name('remove');
+    Route::get('/check/{product}', [WishlistController::class, 'isInWishlist'])->name('check');
+});
+
+// Reviews (public index, authenticated create/update/delete)
+Route::prefix('reviews')->name('reviews.')->group(function () {
+    Route::get('/product/{product}', [ReviewController::class, 'index'])->name('index');
+    
+    Route::middleware('auth')->group(function () {
+        Route::post('/product/{product}', [ReviewController::class, 'store'])->name('store');
+        Route::put('/{review}', [ReviewController::class, 'update'])->name('update');
+        Route::delete('/{review}', [ReviewController::class, 'destroy'])->name('destroy');
+        Route::post('/{review}/helpful', [ReviewController::class, 'markHelpful'])->name('helpful');
+    });
 });
 
 // Newsletter
