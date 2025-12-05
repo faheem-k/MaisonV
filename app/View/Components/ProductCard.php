@@ -8,12 +8,14 @@ use Illuminate\View\Component;
 
 class ProductCard extends Component
 {
+    public $product;
+
     /**
      * Create a new component instance.
      */
-    public function __construct()
+    public function __construct($product = null)
     {
-        //
+        $this->product = $product;
     }
 
     /**

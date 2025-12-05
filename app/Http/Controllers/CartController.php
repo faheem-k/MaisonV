@@ -3,170 +3,306 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Session;
+use Illuminate\View\View;
 
 class CartController extends Controller
 {
+    private const RECOMMENDED_PRODUCTS_LIMIT = 4;
+    private const MAX_QUANTITY_PER_ITEM = 99;
+    
+    private const COUPONS = [
+        'SAVE10' => ['type' => 'percentage', 'value' => 10],
+        'SAVE20' => ['type' => 'percentage', 'value' => 20],
+        'FREESHIP' => ['type' => 'free_shipping', 'value' => 0],
+        'FLAT50' => ['type' => 'fixed', 'value' => 50],
+    ];
+
     /**
-     * Display the shopping cart
+     * Display the shopping cart.
      */
-    public function index()
+    public function index(): View
     {
-        $cart = session()->get('cart', []);
-        
-        // Get recommended products (optional)
-        $recommendedProducts = Product::where('is_active', true)
-            ->where('featured', true)
-            ->inRandomOrder()
-            ->limit(4)
-            ->get();
+        $cart = $this->getCart();
+        $recommendedProducts = $this->getRecommendedProducts();
         
         return view('cart.index', compact('cart', 'recommendedProducts'));
     }
 
     /**
-     * Add product to cart
+     * Add product to cart.
      */
-    public function add(Request $request)
+    public function add(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
-            'quantity' => 'nullable|integer|min:1',
-            'size' => 'nullable|string',
-            'color' => 'nullable|string',
+            'quantity' => 'nullable|integer|min:1|max:' . self::MAX_QUANTITY_PER_ITEM,
+            'size' => 'nullable|string|max:50',
+            'color' => 'nullable|string|max:50',
         ]);
 
-        $product = Product::findOrFail($request->product_id);
-        $cart = session()->get('cart', []);
-        
-        // Create unique cart ID based on product, size, and color
-        $cartId = $product->id;
-        if ($request->size) {
-            $cartId .= '-' . $request->size;
+        try {
+            $product = Product::findOrFail($validated['product_id']);
+            
+            if (!$product->is_active) {
+                return $this->redirectWithError('This product is currently unavailable.');
+            }
+
+            if (isset($product->stock) && $product->stock < ($validated['quantity'] ?? 1)) {
+                return $this->redirectWithError('Insufficient stock available.');
+            }
+
+            $this->addItemToCart(
+                $product,
+                $validated['quantity'] ?? 1,
+                $validated['size'] ?? null,
+                $validated['color'] ?? null
+            );
+            
+            return $this->redirectWithSuccess('Product added to cart successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error adding product to cart', [
+                'product_id' => $validated['product_id'],
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->redirectWithError('Failed to add product to cart. Please try again.');
         }
-        if ($request->color) {
-            $cartId .= '-' . $request->color;
+    }
+
+    /**
+     * Update cart item quantity.
+     */
+    public function update(Request $request, string $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1|max:' . self::MAX_QUANTITY_PER_ITEM,
+        ]);
+
+        try {
+            $cart = $this->getCart();
+            
+            if (!isset($cart[$id])) {
+                return $this->redirectWithError('Item not found in cart!');
+            }
+            
+            $cart[$id]['quantity'] = $validated['quantity'];
+            $this->saveCart($cart);
+            
+            return $this->redirectWithSuccess('Cart updated successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error updating cart', [
+                'cart_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->redirectWithError('Failed to update cart. Please try again.');
+        }
+    }
+
+    /**
+     * Remove item from cart.
+     */
+    public function remove(string $id): RedirectResponse
+    {
+        try {
+            $cart = $this->getCart();
+            
+            if (!isset($cart[$id])) {
+                return $this->redirectWithError('Item not found in cart!');
+            }
+            
+            unset($cart[$id]);
+            $this->saveCart($cart);
+            
+            return $this->redirectWithSuccess('Product removed from cart!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error removing cart item', [
+                'cart_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->redirectWithError('Failed to remove item. Please try again.');
+        }
+    }
+
+    /**
+     * Clear entire cart.
+     */
+    public function clear(): RedirectResponse
+    {
+        try {
+            Session::forget('cart');
+            Session::forget('coupon');
+            
+            return $this->redirectWithSuccess('Cart cleared successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error clearing cart', ['error' => $e->getMessage()]);
+            return $this->redirectWithError('Failed to clear cart. Please try again.');
+        }
+    }
+
+    /**
+     * Apply coupon code.
+     */
+    public function applyCoupon(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'coupon_code' => 'required|string|max:50',
+        ]);
+
+        try {
+            $couponCode = strtoupper(trim($validated['coupon_code']));
+            
+            if (!isset(self::COUPONS[$couponCode])) {
+                return $this->redirectWithError('Invalid coupon code!');
+            }
+            
+            $coupon = self::COUPONS[$couponCode];
+            
+            Session::put('coupon', [
+                'code' => $couponCode,
+                'type' => $coupon['type'],
+                'value' => $coupon['value'],
+            ]);
+            
+            return $this->redirectWithSuccess('Coupon applied successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error applying coupon', [
+                'coupon_code' => $validated['coupon_code'],
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->redirectWithError('Failed to apply coupon. Please try again.');
+        }
+    }
+
+    /**
+     * Remove coupon.
+     */
+    public function removeCoupon(): RedirectResponse
+    {
+        try {
+            Session::forget('coupon');
+            return $this->redirectWithSuccess('Coupon removed!');
+            
+        } catch (\Exception $e) {
+            Log::error('Error removing coupon', ['error' => $e->getMessage()]);
+            return $this->redirectWithError('Failed to remove coupon. Please try again.');
+        }
+    }
+
+    /**
+     * Get cart count (for AJAX requests).
+     */
+    public function count(): JsonResponse
+    {
+        try {
+            $cart = $this->getCart();
+            $count = array_sum(array_column($cart, 'quantity'));
+            
+            return response()->json(['count' => $count]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting cart count', ['error' => $e->getMessage()]);
+            return response()->json(['count' => 0], 500);
+        }
+    }
+
+    /**
+     * Get cart from session.
+     */
+    private function getCart(): array
+    {
+        return Session::get('cart', []);
+    }
+
+    /**
+     * Save cart to session.
+     */
+    private function saveCart(array $cart): void
+    {
+        Session::put('cart', $cart);
+    }
+
+    /**
+     * Generate unique cart ID for an item.
+     */
+    private function generateCartId(int $productId, ?string $size = null, ?string $color = null): string
+    {
+        $cartId = (string) $productId;
+        
+        if ($size) {
+            $cartId .= '-' . $size;
         }
         
-        // If item already exists, increase quantity
-        if(isset($cart[$cartId])) {
-            $cart[$cartId]['quantity'] += $request->quantity ?? 1;
+        if ($color) {
+            $cartId .= '-' . $color;
+        }
+        
+        return $cartId;
+    }
+
+    /**
+     * Add item to cart.
+     */
+    private function addItemToCart(Product $product, int $quantity, ?string $size, ?string $color): void
+    {
+        $cart = $this->getCart();
+        $cartId = $this->generateCartId($product->id, $size, $color);
+        
+        if (isset($cart[$cartId])) {
+            $cart[$cartId]['quantity'] += $quantity;
         } else {
-            // Add new item to cart
             $cart[$cartId] = [
-                "product_id" => $product->id,
-                "name" => $product->name,
-                "quantity" => $request->quantity ?? 1,
-                "price" => $product->price,
-                "image" => $product->image,
-                "size" => $request->size,
-                "color" => $request->color,
+                'product_id' => $product->id,
+                'name' => $product->name,
+                'quantity' => $quantity,
+                'price' => $product->price,
+                'image' => $product->image,
+                'size' => $size,
+                'color' => $color,
             ];
         }
         
-        session()->put('cart', $cart);
-        
-        return redirect()->back()->with('success', 'Product added to cart successfully!');
+        $this->saveCart($cart);
     }
 
     /**
-     * Update cart item quantity
+     * Get recommended products.
      */
-    public function update(Request $request, $id)
+    private function getRecommendedProducts()
     {
-        $request->validate([
-            'quantity' => 'required|integer|min:1',
-        ]);
-
-        $cart = session()->get('cart');
-        
-        if(isset($cart[$id])) {
-            $cart[$id]['quantity'] = $request->quantity;
-            session()->put('cart', $cart);
-            return redirect()->back()->with('success', 'Cart updated successfully!');
-        }
-        
-        return redirect()->back()->with('error', 'Item not found in cart!');
+        return Product::query()
+            ->where('is_active', true)
+            ->where('featured', true)
+            ->inRandomOrder()
+            ->limit(self::RECOMMENDED_PRODUCTS_LIMIT)
+            ->get();
     }
 
     /**
-     * Remove item from cart
+     * Redirect back with success message.
      */
-    public function remove($id)
+    private function redirectWithSuccess(string $message): RedirectResponse
     {
-        $cart = session()->get('cart');
-        
-        if(isset($cart[$id])) {
-            unset($cart[$id]);
-            session()->put('cart', $cart);
-            return redirect()->back()->with('success', 'Product removed from cart!');
-        }
-        
-        return redirect()->back()->with('error', 'Item not found in cart!');
+        return redirect()->back()->with('success', $message);
     }
 
     /**
-     * Clear entire cart
+     * Redirect back with error message.
      */
-    public function clear()
+    private function redirectWithError(string $message): RedirectResponse
     {
-        session()->forget('cart');
-        return redirect()->back()->with('success', 'Cart cleared successfully!');
-    }
-
-    /**
-     * Apply coupon code
-     */
-    public function applyCoupon(Request $request)
-    {
-        $request->validate([
-            'coupon_code' => 'required|string',
-        ]);
-
-        $couponCode = strtoupper($request->coupon_code);
-        
-        // Define your coupons (you can move this to database later)
-        $coupons = [
-            'SAVE10' => ['type' => 'percentage', 'value' => 10],
-            'SAVE20' => ['type' => 'percentage', 'value' => 20],
-            'FREESHIP' => ['type' => 'free_shipping', 'value' => 0],
-            'FLAT50' => ['type' => 'fixed', 'value' => 50],
-        ];
-
-        if (isset($coupons[$couponCode])) {
-            session()->put('coupon', [
-                'code' => $couponCode,
-                'type' => $coupons[$couponCode]['type'],
-                'value' => $coupons[$couponCode]['value'],
-            ]);
-            
-            return redirect()->back()->with('success', 'Coupon applied successfully!');
-        }
-        
-        return redirect()->back()->with('error', 'Invalid coupon code!');
-    }
-
-    /**
-     * Remove coupon
-     */
-    public function removeCoupon()
-    {
-        session()->forget('coupon');
-        return redirect()->back()->with('success', 'Coupon removed!');
-    }
-
-    /**
-     * Get cart count (for AJAX requests)
-     */
-    public function count()
-    {
-        $cart = session()->get('cart', []);
-        $count = 0;
-        
-        foreach($cart as $item) {
-            $count += $item['quantity'];
-        }
-        
-        return response()->json(['count' => $count]);
+        return redirect()->back()->with('error', $message);
     }
 }
